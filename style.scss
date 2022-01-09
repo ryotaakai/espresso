@@ -1,0 +1,90 @@
+.grid-container {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    grid-template-rows: 54px 1fr 45px;
+    grid-template-areas: "header header" "sidenav main" "footer footer";
+    height: 100vh;
+}
+
+.title {
+    padding: 0px 14px 0px 14px;
+    color: #737373;
+    margin: 6px 0px 6px 10px;
+    border-left: 1px solid darkgray;
+    width: 220px;
+}
+  
+.logo {
+    height: 44px;
+}
+
+.commandbutton {
+    height: 44px;
+}
+
+.header {
+    grid-area: header;
+    background-color: #ffffff;
+    padding: 6px 0px 6px 10px;
+    display: flex;
+}
+  
+.main {
+    grid-area: main;
+    background-color: #faf9f8;
+    padding-left: 28px;
+    padding-right: 28px;
+    max-width: calc(100vw - 80px);
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+}
+  
+.footer {
+    grid-area: footer;
+    background-color: #f3f2f1;
+    padding: 12px 20px;
+}
+
+.sidenav {
+    grid-area: sidenav;
+    background-color: #ffffff;
+    padding: 25px;
+}
+
+body {
+    background-color: rgba(255, 255, 255, 0.2);
+    min-height: 611px;
+    margin: 0;
+}
+
+
+.page-title {
+    padding: 20px 10px;
+}
+
+.card {
+    background: #ffffff;
+    padding: 28px;
+    margin-bottom: 0px;
+    border-radius: 2x;
+    background-clip: padding-box;
+}
+
+#myBtn {
+    display: none; /* Hidden by default */
+    position: fixed; /* Fixed/sticky position */
+    bottom: 20px; /* Place the button at the bottom of the page */
+    right: 30px; /* Place the button 30px from the right */
+    z-index: 99; /* Make sure it does not overlap */
+    border: none; /* Remove borders */
+    outline: none; /* Remove outline */
+    background-color: rgb(0, 255, 170); /* Set a background color */
+    color: white; /* Text color */
+    cursor: pointer; /* Add a mouse pointer on hover */
+    padding: 30px; /* Some padding */
+    border-radius: 120px; /* Rounded corners */
+}
+
+#myBtn:hover {
+    background-color: rgb(190, 223, 212); /* Add a dark-grey background on hover */
+}

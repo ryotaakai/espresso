@@ -1,0 +1,12 @@
+version
+remotes::install_github("Appsilon/shiny.react")#
+remotes::install_github("Appsilon/shiny.fluent")
+install.packages("shiny")
+source("/Users/estyle-077/fluent-maeshori/app.R")
+setwd('Users/estyle-077/fluent-maeshori')
+setwd('/Users/estyle-077/prepare/espresso/app.R')
+dndselectr::runExample("01-basic.R")
+setwd('/Users/estyle-077/prepare/espresso/')
+source('/Users/estyle-077/prepare/espresso/app.R')
+runApp()
+runApp()
