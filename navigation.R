@@ -1,11 +1,9 @@
 navigation <- Nav(
   groups = list(
     list(links = list(
-      list(name = 'オリジナルデータ', url = '#!/home', key = 'home', icon = 'Table', isExpanded= TRUE),
-      list(name = '前処理', url = '#!/preprocess', key = 'preprocess', icon = 'TripleColumnEdit'),
-      list(name = '可視化', url = '#!/visualize', key = 'visualize', icon = 'LineChart'),
-      list(name = '学習', url = '#!/learn', key = 'learn', icon = 'SearchAndApps'),
-      list(name = 'ダッシュボード', url = '#!/dashboard', key = 'dashboard', icon = 'ViewDashboard')
+      list(name = 'オリジナルデータ', url = '#!/home', key = 'home', icon = 'Coffee', isExpanded= TRUE),
+      list(name = '前処理', url = '#!/preprocess', key = 'preprocess', icon = 'Filter'),
+      list(name = 'ダッシュボード', url = '#!/dashboard', key = 'dashboard', icon = 'CoffeeScript')
     ))
   ),
   initialSelectedKey = 'preprocess',

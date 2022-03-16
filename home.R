@@ -4,9 +4,8 @@ home_page <- Page(
   Grid(
     GridItem(
       Card(
-          title="Sales deals details",
           div(style = "height: 100%; overflow: auto;",
-          uiOutput("table")),
+              DT::dataTableOutput("originTable"))
       )
     )
   )

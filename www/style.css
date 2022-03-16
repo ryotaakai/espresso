@@ -22,11 +22,29 @@
   height: 44px;
 }
 
+.toggle {
+  align-self: end;
+}
+
+.downloadbutton {
+  height: 44px;
+}
+
+.link {
+  align-self: center;
+  color: black;
+  text-decoration: none;
+}
+
 .header {
   grid-area: header;
   background-color: #ffffff;
   padding: 6px 0px 6px 10px;
   display: flex;
+}
+
+.active {
+  background-color: #c8984b;
 }
 
 .main {
@@ -67,6 +85,32 @@ body {
   margin-bottom: 0px;
   border-radius: 2x;
   background-clip: padding-box;
+}
+
+#container {
+  width: 100px;
+  height: 100px;
+  border: 1px solid red;
+  /** for viewing purposes **/
+  text-align: center;
+  /** center the divs **/
+  font-size: 0;
+  /** remove the unwanted space caused by display: inline-block in .child **/
+}
+
+#container .child {
+  display: inline-block;
+  /** set the divs side-by-side **/
+  vertical-align: top;
+  width: 20px;
+  height: 100px;
+  font-size: 12px;
+  /** override font-size: 0 of #container, so that text will be visible again **/
+  text-align: left;
+  /** set text in the .child divs back to normal alignment **/
+  border: 1px solid blue;
+  /** for viewing purposes **/
+  box-sizing: border-box;
 }
 
 #myBtn {

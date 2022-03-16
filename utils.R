@@ -30,3 +30,4 @@ Page <- function (..., title, subtitle) {
   ),
   ...)
 }
+
