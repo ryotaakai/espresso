@@ -1,0 +1,12 @@
+JS                      Mark character strings as literal JavaScript
+                        code
+asProps                 Parse arguments as props
+enableReactDebugMode    Enable 'React' debug mode
+reactDependency         'React' library dependency
+reactElement            Create a 'React' element
+reactOutput             'React' output
+renderReact             Render 'React'
+setInput                Set input
+shinyReactDependency    'shiny.react' JavaScript dependency
+triggerEvent            Trigger event
+updateReactInput        Update 'React' input

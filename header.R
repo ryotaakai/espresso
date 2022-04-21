@@ -1,6 +1,6 @@
 header <- tagList(
   img(src = "estyle-logo.png", class = "logo"),
-  div(Text(variant = "xLarge", "ESPRESSO"), class = "title"),
+  div(shiny.fluent::Text(variant = "xLarge", "ESPRESSO"), class = "title"),
   div(
     CommandBarButton.shinyInput("upload", class="commandbutton", text="アップロード", iconProps = list("iconName" = "Upload"))
   ),

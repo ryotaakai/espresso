@@ -5,6 +5,7 @@ source("server_function.R")
 source("utils.R")
 source("navigation.R")
 source("home.R")
+source("dashboard.R")
 source("header.R")
 source("footer.R")
 source("preprocessing.R")
@@ -14,7 +15,8 @@ shiny.react::enableReactDebugMode()
 
 pages <- c(
   list(route("preprocess", preprocessing_page)), 
-  list(route("home", home_page))
+  list(route("home", home_page)),
+  list(route("dashboard", dashboard_page))
 )
 router <- lift(make_router)(pages)
 
@@ -116,7 +118,9 @@ server <- function(input, output, session) {
   values$scoreframe <- data.frame(x=c())
   values$clusterd_data <- data.frame(x=c())
   values$colinfo_for_clustering <- data.frame(x=c())
-  
+  values$save_plot <- list()
+
+  iconHistory <-c()
   computing <- reactiveVal(FALSE)
   trigger <- debounce(computing, 5)
   
@@ -149,6 +153,41 @@ server <- function(input, output, session) {
     session$sendCustomMessage("colnames", colInfo)
     
     updateData(csv_file(), input, output, session, values)
+  })
+  
+  observeEvent(input$save_plot,{
+    req(input$plot)
+    uiSavePlot = reactive(switch(input$plot,
+                             "plotBasic" = SavePlotItem("plotBasic"),
+                             "plotAgg" = SavePlotItem("plotAgg"),
+                             "plotFund" = SavePlotItem("plotFund"),
+                             "plotImp" = SavePlotItem("plotImp"),
+                             "plotCorr" = SavePlotItem("plotCorr"),
+                             "plotLabel" = SavePlotItem("plotLabel"),
+                             "plotClust" = SavePlotItem("plotClust")
+    ))
+    print(uiSavePlot())
+    values$save_plot <- append(values$save_plot, list(div(
+      style="text-align:right;float:right;",
+      CommandBarButton.shinyInput(sprintf("delete%s", input$plot), class="deletePlot", iconProps = list("iconName" = "StatusCircleErrorX"))
+    ), uiSavePlot()))
+    output$uiSavePlotItems <- renderUI(values$save_plot)
+  })
+  
+  # HISTORY
+  undo_app_state <- undoHistory(
+    id = "hist",
+    value = reactive({
+      # Value must be a reactive, but can be any structure you want
+      req(!is.null(values$dat))
+      values$dat
+    })
+  )
+  
+  observe({
+    req(!is.null(undo_app_state())) #<< Need to update app whenever not NULL
+    # Manually update app UI and reactive values
+    updateData(undo_app_state(), input, output, session, values)
   })
   # SPINNER
   observeEvent(trigger(), {
@@ -191,16 +230,24 @@ server <- function(input, output, session) {
   output$uiView <- renderUI({list(
     GridItem(
       class = "ms-sm12 ms-xl8",
-      Card(title = "プロット",
+      Card(title = "",
+           div(
+             style="text-align:left;",
+             Text(variant = "large", 'プロットパネル'),
+             div(
+               style="text-align:right;float:right;",
+               CommandBarButton.shinyInput("save_plot", class="commandbutton", text="ダッシュボードに保存する", iconProps = list("iconName" = "Save"))
+             )
+           ),
            plotMenu,
-           plotOutput("corrplot")
+           uiOutput("uiPlotItems")
       )
     ),
     GridItem(
       Card(
         title="テーブル",
         id = "table_ui",
-        div(style = "height: 500px; overflow: auto;",
+        div(style = "height: 500px;",
             DT::dataTableOutput("outputTable"))
       )
     )
@@ -211,9 +258,17 @@ server <- function(input, output, session) {
       output$uiView <- renderUI({list(
         GridItem(
           class = "ms-sm12 ms-xl8",
-          Card(title = "プロット",
+          Card(title = "",
+               div(
+                 style="text-align:left;",
+                 Text(variant = "large", 'プロットパネル'),
+                 div(
+                   style="text-align:right;float:right;",
+                   CommandBarButton.shinyInput("save_plot", class="commandbutton", text="ダッシュボードに保存する", iconProps = list("iconName" = "Save"))
+                 )
+               ),
                plotMenu,
-               plotOutput("corrplot")
+               uiOutput("uiPlotItems")
           )
         ),
         GridItem(
@@ -237,9 +292,17 @@ server <- function(input, output, session) {
           )
         ),
         GridItem(
-          Card(title = "プロット",
+          Card(title = "",
+               div(
+                 style="text-align:left;",
+                 Text(variant = "large", 'プロットパネル'),
+                 div(
+                   style="text-align:right;float:right;",
+                   CommandBarButton.shinyInput("save_plot", class="commandbutton", text="ダッシュボードに保存する", iconProps = list("iconName" = "Save"))
+                 )
+               ),
                plotMenu,
-               plotOutput("corrplot")
+               uiOutput("uiPlotItems")
           )
         )
       )})
@@ -248,6 +311,7 @@ server <- function(input, output, session) {
   
   # FILTER MODE SELECTION
   observeEvent(input$filter, {
+    req(input$filter)
     uiFilter = reactive(switch(input$filter,
       "convertType" = FilterItem("convertType"),
       "reorderRow" = FilterItem("reorderRow"),
@@ -265,6 +329,7 @@ server <- function(input, output, session) {
       "lagGeneration" = FilterItem("lagGeneration"),
       "leadGeneration" = FilterItem("leadGeneration"),
       "movingAverage" = FilterItem("movingAverage"),
+      "clustering" = FilterItem("clustering"),
       "characterMerge" = FilterItem("characterMerge"),
       "characterSplit" = FilterItem("characterSplit"),
       "characterFilter" = FilterItem("characterFilter"),
@@ -277,26 +342,72 @@ server <- function(input, output, session) {
       "fundStatPlot" = FilterItem("fundStatPlot"),
       "impPlot" = FilterItem("impPlot"),
       "corrPlot" = FilterItem("corrPlot"),
-      "labelPlot" = FilterItem("labelPlot"),
-      "clustering" = FilterItem("clustering")
+      "labelPlot" = FilterItem("labelPlot")
     ))
+    uiPlot = reactive(switch(input$filter,
+       "clustering" = PlotItem("plotClust")
+    ))
+    output$uiPlotItems <- renderUI({uiPlot()})
     output$uiFilterItems <- renderUI({uiFilter()})
   })
   
   # PLOT MODE SELECTION
   observeEvent(input$plot, {
+    req(input$plot)
     uiPlot = reactive(switch(input$plot,
-                               "plotBasic" = PlotItem("plotBasic"),
-                               "plotAgg" = PlotItem("plotAgg"),
-                               "plotFund" = PlotItem("plotFund"),
-                               "plotImp" = PlotItem("plotImp"),
-                               "corrPlot" = PlotItem("corrPlot"),
-                               "plotCorr" = PlotItem("plotCorr"),
-                               "plotLabel" = PlotItem("plotLabel"),
-                               "plotClust" = PlotItem("plotClust")
+      "plotBasic" = PlotItem("plotBasic"),
+      "plotAgg" = PlotItem("plotAgg"),
+      "plotFund" = PlotItem("plotFund"),
+      "plotImp" = PlotItem("plotImp"),
+      "plotCorr" = PlotItem("plotCorr"),
+      "plotLabel" = PlotItem("plotLabel"),
+      "plotClust" = PlotItem("plotClust")
+    ))
+    uiFilter = reactive(switch(input$plot,
+      "plotBasic" = FilterItem("plotlyPlot"),
+      "plotAgg" = FilterItem("aggPlot"),
+      "plotFund" = FilterItem("fundStatPlot"),
+      "plotImp" = FilterItem("impPlot"),
+      "plotCorr" = FilterItem("corrPlot"),
+      "plotLabel" = FilterItem("labelPlot"),
+      "plotClust" = FilterItem("clustering")
     ))
     output$uiPlotItems <- renderUI({uiPlot()})
+    output$uiFilterItems <- renderUI({uiFilter()})
   })
+  
+  #
+  
+  observeEvent(input$deleteplotCorr, {
+    req(input$deleteplotCorr)
+    removeUI(
+      selector = "div:has(> #corrplot2)"
+    )
+    removeUI(
+      selector = "div:has(> #deleteplotCorr)"
+    )
+  })
+  
+  observeEvent(input$deleteplotBasic, {
+    req(input$deleteplotBasic)
+    removeUI(
+      selector = "div:has(> #plot2)"
+    )
+    removeUI(
+      selector = "div:has(> #deleteplotBasic)"
+    )
+  })
+  
+  observeEvent(input$deleteplotLabel, {
+    req(input$deleteplotLabel)
+    removeUI(
+      selector = "div:has(> #labelplot2)"
+    )
+    removeUI(
+      selector = "div:has(> #deleteplotLabel)"
+    )
+  })
+  
   
   # MODAL
   modalVisible <- reactiveVal(FALSE)
@@ -400,6 +511,7 @@ server <- function(input, output, session) {
       values$history <- c(values$history,list(action_list))
       
       updateData(result[[2]], input, output, session, values)
+      appendIcon("class_change", iconHistory, output)
     }
   })
   
@@ -412,6 +524,7 @@ server <- function(input, output, session) {
       values$history <- c(values$history,list(action_list))
       
       updateData(result[[2]], input, output, session, values)
+      appendIcon("dttm_change", iconHistory, output)
     }
   })
   
@@ -423,6 +536,7 @@ server <- function(input, output, session) {
     values$history <- c(values$history,list(action_list))
     
     updateData(df, input, output, session, values)
+    appendIcon("arrange_row", iconHistory, output)
   })
   
   #行のフィルタリング
@@ -434,6 +548,7 @@ server <- function(input, output, session) {
       values$history <- c(values$history,list(action_list))
       
       updateData(result[[2]], input, output, session, values)
+      appendIcon("filter_row", iconHistory, output)
     }
   })
   
@@ -445,6 +560,7 @@ server <- function(input, output, session) {
     values$history <- c(values$history,list(action_list))
     
     updateData(df, input, output, session, values)
+    appendIcon("select_columns", iconHistory, output)
   })
   
   # onehot化
@@ -611,6 +727,7 @@ server <- function(input, output, session) {
       values$history <- c(values$history,list(action_list))
       
       updateData(renameColumn(values$dat, jsonConvert(input$colnameChange), input$newName), input, output, session, values)
+      appendIcon("nameChange", iconHistory, output)
     }
   })
   
@@ -657,6 +774,7 @@ server <- function(input, output, session) {
                  values$history <- c(values$history,list(action_list))
                  
                  updateData(removeColumn(values$dat, jsonConvert(input$colnameDelete)), input, output, session, values)
+                 appendIcon("columnDelete", iconHistory, output)
                })
   
   
@@ -787,6 +905,8 @@ server <- function(input, output, session) {
     colInfo_target <- union(colInfo_num_int,colInfo_char_fact_u5)
     
     colInfo <- colnames(values$dat)
+    
+    
     session$sendCustomMessage("colnames", colInfo)
   })
   
@@ -796,8 +916,8 @@ server <- function(input, output, session) {
       output = tagList()
       
       #Y変数の入力がない場合(ヒストグラムか棒グラフの場合)
-      if(input$vary =='None'){
-        
+      if(is.null(input$vary)){
+        req(input$varx)
         #ヒストグラム or カーネル密度推定
         if(class(values$dat[[jsonConvert(input$varx)]]) == 'numeric'){
           output[[1]] = radioGroupButtons("histogramtype", "表示オプション", c('カウント','カーネル密度','カーネル密度+ヒストグラム'), selected = values$histogramtype,justified = TRUE)
@@ -887,40 +1007,6 @@ server <- function(input, output, session) {
     values$graphtype2 <- input$graphtype2
   })
   
-  # Rio: varx_timeが入力されたらグラフを作成する。""の時は処理しない
-  observeEvent(input$varx_time, if(jsonConvert(input$varx_time!='')) {
-    output$labelplot <- renderPlot({
-      #プロットテーマ
-      theme <- theme_gray(base_family = "HiraKakuPro-W3",base_size = 15)
-      if(jsonConvert(input$vary_time) !='None'){
-        switch(input$modetype,
-               "max" =  p <- ggplotWithPeaks(type="max", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=input$window_size, span=input$span),
-               "min" =  p <- ggplotWithPeaks(type="min", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=input$window_size, span=input$span),
-               "max+min" =  p <- ggplotWithPeaks(type="max+min", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=input$window_size, span=input$span),
-        )
-        p <- p + xlab(jsonConvert(input$varx_time)) + ylab(jsonConvert(input$vary_time))
-        print(p)
-      }else{
-        p <- ggplot(values$dat, aes(x = values$dat[[jsonConvert(input$varx_time)]], y = values$dat[[jsonConvert(input$varx_time)]] ),na.rm = TRUE)+
-          geom_line() +
-          xlab(jsonConvert(input$varx_time)) + 
-          ylab(jsonConvert(input$varx_time)) +
-          theme + geom_smooth(method = "auto")
-        print(p)
-      }
-    }, res = 96)
-  })
-  
-  #Rio: Max/Min/Max+Minの仕様を変更するUI
-  observeEvent(values$dat,{
-    output$modeselectcontrols <- renderUI({
-      output = tagList()
-      output[[1]] = radioGroupButtons("modetype", choices=c('max','min','max+min'), selected=values$modetype,justified = TRUE)
-      values$show <- TRUE
-      output
-    })
-  })
-  
   #Rio: Max/Min/Max+Minの表に更新
   observeEvent(input$make_label, {
     if (jsonConvert(input$varx_time) == jsonConvert(input$vary_time)) {
@@ -930,14 +1016,14 @@ server <- function(input, output, session) {
         text = "X軸のデータとY軸のデータが同一です。",
         type = "warning"
       )
-    } else if (jsonConvert(input$varx_time == 'None')) {
+    } else if (is.null(input$varx_time)) {
       sendSweetAlert(
         session = session,
         title = NULL,
         text = "X軸の変数を入力してください",
         type = "warning"
       )
-    } else if (jsonConvert(input$vary_time == 'None')) {
+    } else if (is.null(input$vary_time)){
       sendSweetAlert(
         session = session,
         title = NULL,
@@ -945,22 +1031,22 @@ server <- function(input, output, session) {
         type = "warning"
       )
     } else {
-      df <- makeEventLabel(dat=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=input$window_size, span=input$span, type=input$modetype)
-      action_list <- list('make_label',jsonConvert(input$varx_time), jsonConvert(input$vary_time), input$window_size, input$span, input$modetype)
+      df <- makeEventLabel(dat=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span), type=input$modetype)
+      action_list <- list('make_label',input$varx_time, input$vary_time, input$window_size, input$span, input$modetype)
       values$history <- c(values$history,list(action_list))
       updateData(df, input, output, session, values)
     }
   })
   
   #変数入力が変更されたら、グラフを作成する。変数Xが入力されたら発火する。初期varxが""の時は処理しない。
-  observeEvent(input$varx,
-               if(jsonConvert(input$varx)!='')  {
+  observeEvent(input$plotlyPlotButton,
+               if(!is.null(jsonConvert(input$varx)))  {
                  output$plot <- renderPlot({
                    
                    theme <- theme_gray(base_family = "HiraKakuPro-W3",base_size = 15)
                    
                    #変数yが入力されている場合
-                   if(input$vary !='None'){
+                   if(!is.null(input$vary)){
                      
                      values$graphtype <- "散布図"
                      
@@ -1012,12 +1098,12 @@ server <- function(input, output, session) {
                        theme+smooth+jitter
                      
                      #色あり
-                     if(input$varc !='None'){
+                     if(!is.null(input$varc)){
                        p <- p+aes(colour = .data[[jsonConvert(input$varc)]])+labs(color=jsonConvert(input$varc))
                      }
                      
                      #ファセットあり
-                     if(input$varf !='None'){
+                     if(!is.null(input$varf)){
                        p <- p+facet_wrap(~ .data[[jsonConvert(input$varf)]])
                      }  
                      
@@ -1049,11 +1135,11 @@ server <- function(input, output, session) {
                          temp_plot+ylabel+xlab(jsonConvert(input$varx))+theme
                        
                        #色あり
-                       if(input$varc !='None'){
+                       if(!is.null(input$varc)){
                          p <- p + aes(fill = as.factor(.data[[jsonConvert(input$varc)]])) + labs(fill=jsonConvert(input$varc))
                        }
                        #ファセットあり
-                       if(input$varf !='None'){
+                       if(!is.null(input$varf)){
                          p <- p + facet_wrap(~ .data[[jsonConvert(input$varf)]])
                        }
                        
@@ -1083,13 +1169,155 @@ server <- function(input, output, session) {
                        
                        
                        #色あり
-                       if(input$varc != 'None'){
+                       if(!is.null(input$varc)){
                          p <- p+aes(fill= as.factor(.data[[jsonConvert(input$varc)]]))+
                            labs(fill=input$varc)
                        }
                        
                        #ファセットあり 
-                       if(input$varf != 'None'){
+                       if(!is.null(input$varf)){
+                         p <- p + facet_wrap(~ .data[[jsonConvert(input$varf)]])
+                       }
+                       print(p)
+                     }
+                   }
+                 }, res = 96)
+                 
+                 output$plot2 <- renderPlot({
+                   
+                   theme <- theme_gray(base_family = "HiraKakuPro-W3",base_size = 15)
+                   
+                   #変数yが入力されている場合
+                   if(!is.null(input$vary)){
+                     
+                     values$graphtype <- "散布図"
+                     
+                     #X,Yとも数値入力の場合(近似曲線の表示あり)
+                     if((class(values$dat[[jsonConvert(input$varx)]]) != 'factor' && class(values$dat[[jsonConvert(input$varx)]]) != 'character' )
+                        && (class(values$dat[[jsonConvert(input$vary)]]) != 'factor'&& class(values$dat[[jsonConvert(input$vary)]]) != 'character' )){ 
+                       
+                       #input$smoothlabelが入力されるまで待機
+                       req(input$smoothlabel,input$pointorline)
+                       switch(input$smoothlabel,
+                              "有" =  smooth <- geom_smooth(se = FALSE),
+                              "無" =  smooth <- NULL
+                       )
+                       
+                       switch(input$pointorline,
+                              "散布図" =  temp_plot <- geom_point(),
+                              "ジッター" =  temp_plot <- geom_point(position = position_jitter()),
+                              "折れ線" =  temp_plot <- geom_line(),
+                       )
+                       jitter <- NULL
+                       
+                       #X,Yのどちらかがファクター/文字列入力の場合(近似曲線を表示しない)  
+                     }else{
+                       # req(input$jitterlabel)
+                       # smooth <- NULL
+                       # switch(input$jitterlabel,
+                       #        "有" =  temp_plot <- geom_point(position = position_jitter()),
+                       #        "無" =  temp_plot <- geom_point(),
+                       # )
+                       req(input$graphtype2)
+                       smooth <- NULL
+                       jitter <- NULL
+                       switch(input$graphtype2,
+                              "散布図" =  temp_plot <- geom_point(),
+                              "ジッター" =  temp_plot <- geom_point(position = position_jitter()),
+                              "ボックス" =  temp_plot <- geom_boxplot(),
+                              "ボックス+ジッター" =  temp_plot <- geom_boxplot(),
+                       )
+                       
+                       if (input$graphtype2 =="ボックス+ジッター"){
+                         jitter <- geom_jitter()
+                       }
+                     }
+                     
+                     p <- ggplot(values$dat, aes(x = .data[[jsonConvert(input$varx)]], y = .data[[jsonConvert(input$vary)]] ),na.rm = TRUE)+
+                       temp_plot+
+                       xlab(jsonConvert(input$varx)) + 
+                       ylab(jsonConvert(input$vary)) +
+                       theme+smooth+jitter
+                     
+                     #色あり
+                     if(!is.null(input$varc)){
+                       p <- p+aes(colour = .data[[jsonConvert(input$varc)]])+labs(color=jsonConvert(input$varc))
+                     }
+                     
+                     #ファセットあり
+                     if(!is.null(input$varf)){
+                       p <- p+facet_wrap(~ .data[[jsonConvert(input$varf)]])
+                     }  
+                     
+                     print(p)
+                     
+                     #変数yが入力されていない場合  
+                   }else{
+                     
+                     #変数xが整数あるいはカテゴリの場合、棒グラフを表示する。
+                     if(class(values$dat[[jsonConvert(input$varx)]]) != 'numeric'){
+                       req(input$bartype)
+                       values$graphtype <- "棒グラフ"
+                       
+                       #表示オプションに応じてgeom_bar内のオプションを変更
+                       switch(input$bartype,
+                              "カウント(横並び)"= temp_plot <-  geom_bar(position = "dodge", alpha = 1) ,
+                              "カウント(積み上げ)"= temp_plot <-  geom_bar(position = "stack", alpha = 1),
+                              "割合" = temp_plot <-  geom_bar(position = "fill", alpha = 1),
+                       )
+                       
+                       #表示オプションに応じてY軸のラベル変更
+                       switch(input$bartype,
+                              "カウント(横並び)"= ylabel <-  ylab('count'),
+                              "カウント(積み上げ)"=ylabel <-  ylab('count'),
+                              "割合" = ylabel <-  ylab('weight'),
+                       )
+                       
+                       p <- ggplot(values$dat, aes(x = .data[[jsonConvert(input$varx)]]))+
+                         temp_plot+ylabel+xlab(jsonConvert(input$varx))+theme
+                       
+                       #色あり
+                       if(!is.null(input$varc)){
+                         p <- p + aes(fill = as.factor(.data[[jsonConvert(input$varc)]])) + labs(fill=jsonConvert(input$varc))
+                       }
+                       #ファセットあり
+                       if(!is.null(input$varf)){
+                         p <- p + facet_wrap(~ .data[[jsonConvert(input$varf)]])
+                       }
+                       
+                       print(p)
+                       
+                       #変数xが数値型の場合、ヒストグラムを表示する。    
+                     }else{   
+                       
+                       values$graphtype <- "ヒストグラム"
+                       #histogramtypeが入力されていない時は処理を止める
+                       req(input$histogramtype,input$histbin)
+                       
+                       alpha <- ifelse(jsonConvert(input$varc) == jsonConvert(input$varf), 0.7, 0.5)
+                       
+                       switch(input$histogramtype,
+                              "カウント"= temp_plot <-  geom_histogram(position = "identity", alpha = alpha,bins = input$histbin),
+                              "カーネル密度"= temp_plot <-  geom_density(position = "identity", alpha = alpha),
+                              "カーネル密度+ヒストグラム" = temp_plot <-  geom_density(position = "identity", alpha = 0.2),
+                       )
+                       
+                       p <- ggplot(values$dat, aes(x = .data[[jsonConvert(input$varx)]]))+
+                         xlab(jsonConvert(input$varx))+theme+temp_plot
+                       
+                       if(input$histogramtype=="カーネル密度+ヒストグラム"){
+                         p <- p + geom_histogram(aes(y = ..density..),position = "identity", alpha = alpha,bins = input$histbin)
+                       }
+                       
+                       
+                       #色あり
+                       if(!is.null(input$varc)){
+                         p <- p+aes(fill= as.factor(.data[[jsonConvert(input$varc)]]))+
+                           labs(fill=input$varc)
+                       }
+                       
+                       #ファセットあり 
+                       if(!is.null(input$varf)){
                          p <- p + facet_wrap(~ .data[[jsonConvert(input$varf)]])
                        }
                        print(p)
@@ -1163,6 +1391,32 @@ server <- function(input, output, session) {
         "}")
     ))
     
+    output$summary2 <- DT::renderDataTable({
+      
+      df <- skimr::skim(values$dat) %>% as.data.frame()
+      col_length <- df %>% colnames() %>% length()
+      c(2,1,3:col_length)
+      
+      df <- df[c(2,1,3:col_length)]
+      
+      colname <- df %>% colnames()
+      colnames(df) <- c("varName","type",colname[3:length(colname)])
+      df
+      
+    },extensions = c('Scroller'), rownames = TRUE,class = 'cell-border stripe',colnames = c(No. = 1),
+    options = list(
+      autoWidth = TRUE,
+      fixedColumns = list(leftColumns = 3),
+      dom = 'rti',
+      scrollY = 500,
+      scrollX = TRUE,
+      scroller = TRUE,
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "$(this.api().table().header()).css({'background-color': '#1f618d', 'color': '#fff'});",
+        "}")
+    ))
+    
     # output$summary <- DT::renderDataTable({
     #   
     #   tableplot <- values$dat %>%
@@ -1202,23 +1456,27 @@ server <- function(input, output, session) {
     
   },res = 96)
   
-  agg_df <- reactive({
-    df<- values$dat
-    g_df <- df %>% group_by(.dots = input$groupby) 
+  output$corrplot2<- renderPlot({
     
-    agg_col_sym <- rlang::sym(input$agg_colname)
+    #データフレームが空でない場合に相関表示
+    if(nrow(values$dat)!=0){
+      c_name <- as.data.frame(colnames(values$dat))
+      datatype <- as.data.frame(t(as.data.frame(lapply(values$dat, class))))[,1]
+      datatype <- as.data.frame(cbind(c_name,datatype))
+      
+      rownames(datatype) <- NULL
+      colnames(datatype) <- c('変数名','変数型')
+      
+      datatype <- datatype[datatype[['変数型']]=='numeric'|datatype[['変数型']]=='integer',]
+      colInfo_num_int <- datatype[['変数名']]
+      
+      df <- values$dat[colInfo_num_int]
+      df_corr <- cor(df,use = "complete.obs")
+      
+      print(corrplot::corrplot(df_corr,tl.col="black", tl.srt=45,cl.pos = 'b'))
+    }
     
-    switch (input$aggregation,
-            '最大' = agg_df <- g_df %>% summarise("{{agg_col_sym}}_max":=max({{agg_col_sym}},na.rm = TRUE)),
-            '最小' = agg_df <- g_df %>% summarise("{{agg_col_sym}}_min":=min({{agg_col_sym}},na.rm = TRUE)),
-            '平均' = agg_df <- g_df %>% summarise("{{agg_col_sym}}_mean":=mean({{agg_col_sym}},na.rm = TRUE)),
-            '分散' = agg_df <- g_df %>% summarise("{{agg_col_sym}}_var":=var({{agg_col_sym}},na.rm = TRUE)),
-            '中央値' = agg_df <- g_df %>% summarise("{{agg_col_sym}}_median":=median({{agg_col_sym}},na.rm = TRUE)),
-            '合計' = agg_df <- g_df %>% summarise("{{agg_col_sym}}_sum":=sum({{agg_col_sym}},na.rm = TRUE)),
-            'カウント' = agg_df <- g_df %>% summarise(カウント=n())
-    )
-    agg_df
-  })
+  },res = 96)
   
   observeEvent(input$groupby,{
     
@@ -1328,6 +1586,16 @@ server <- function(input, output, session) {
       
     },res = 96)
     
+    output$sigplot2 <- renderPlot({
+      
+      plot <- scoreFrame() %>% ggplot(aes(x = reorder(.data[["varName"]],.data[["significance_R2"]]),y = .data[["significance_R2"]]))
+      plot <- plot+geom_bar(stat = "summary", fun = "mean")+theme_gray(base_family = "HiraKakuPro-W3",base_size = 15)+
+        theme(legend.position = 'none')+coord_flip()+xlab("varName")
+      
+      print(plot)
+      
+    },res = 96)
+    
   })
   
   
@@ -1417,7 +1685,7 @@ server <- function(input, output, session) {
   
   
   # #時系列クラスタリングの実行
-  observeEvent(input$exce_clustering,if(!is.null(input$num_cluster)) {
+  observeEvent(input$exec_clustering,if(!is.null(input$num_cluster)) {
     req(input$file)
     switch(input$clustering_type,
            "DTW：傾向" = diss_type <- "DTWARP",
@@ -1436,6 +1704,9 @@ server <- function(input, output, session) {
     #時系列プロットの表示
     p <- plot_group(values$clustered_data,values$cluster)
     output$clustering_plot<- renderPlot({
+      print(p)
+    })
+    output$clustering_plot2<- renderPlot({
       print(p)
     })
     #セレクトインプットの更新
@@ -1491,29 +1762,49 @@ server <- function(input, output, session) {
   })
   
   # Rio: varx_timeが入力されたらグラフを作成する。""の時は処理しない
-  observeEvent(input$varx_time, if(input$varx_time!='') {
+  observeEvent(input$make_labelplot, if(!is.null(input$varx_time)) {
     output$labelplot <- renderPlot({
       #プロットテーマ
       theme <- theme_gray(base_family = "HiraKakuPro-W3",base_size = 15)
-      if(input$vary_time !='None'){
+      if(!is.null(input$vary_time)){
         switch(input$modetype,
-               "max" =  p <- ggplotWithPeaks(type="max", data=values$dat, x=input$varx_time, y=input$vary_time, w=input$window_size, span=input$span),
-               "min" =  p <- ggplotWithPeaks(type="min", data=values$dat, x=input$varx_time, y=input$vary_time, w=input$window_size, span=input$span),
-               "max+min" =  p <- ggplotWithPeaks(type="max+min", data=values$dat, x=input$varx_time, y=input$vary_time, w=input$window_size, span=input$span),
+               "max" =  p <- ggplotWithPeaks(type="max", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span)),
+               "min" =  p <- ggplotWithPeaks(type="min", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span)),
+               "max+min" =  p <- ggplotWithPeaks(type="max+min", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span)),
         )
-        p <- p + xlab(input$varx_time) + ylab(input$vary_time)
+        p <- p + xlab(jsonConvert(input$varx_time)) + ylab(jsonConvert(input$vary_time))
         print(p)
       }else{
-        p <- ggplot(values$dat, aes(x = values$dat[[input$varx_time]], y = values$dat[[input$varx_time]] ),na.rm = TRUE)+
+        p <- ggplot(values$dat, aes(x = values$dat[[jsonConvert(input$varx_time)]], y = values$dat[[jsonConvert(input$varx_time)]] ),na.rm = TRUE)+
           geom_line() +
-          xlab(input$varx_time) + 
-          ylab(input$varx_time) +
-          theme + geom_smooth(method = "auto")
+          xlab(jsonConvert(input$varx_time)) + 
+          ylab(jsonConvert(input$varx_time)) +
+          theme
         print(p)
       }
     }, res = 96)
+    output$labelplot2 <- renderPlot({
+      #プロットテーマ
+      theme <- theme_gray(base_family = "HiraKakuPro-W3",base_size = 15)
+      if(!is.null(input$vary_time)){
+        switch(input$modetype,
+               "max" =  p <- ggplotWithPeaks(type="max", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span)),
+               "min" =  p <- ggplotWithPeaks(type="min", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span)),
+               "max+min" =  p <- ggplotWithPeaks(type="max+min", data=values$dat, x=jsonConvert(input$varx_time), y=jsonConvert(input$vary_time), w=as.numeric(input$window_size), span=as.numeric(input$span)),
+        )
+        p <- p + xlab(jsonConvert(input$varx_time)) + ylab(jsonConvert(input$vary_time))
+        print(p)
+      }else{
+        p <- ggplot(values$dat, aes(x = values$dat[[jsonConvert(input$varx_time)]], y = values$dat[[jsonConvert(input$varx_time)]] ),na.rm = TRUE)+
+          geom_line() +
+          xlab(jsonConvert(input$varx_time)) + 
+          ylab(jsonConvert(input$varx_time)) +
+          theme
+        print(p)
+      }
+    })
   })
   
 }
-
+enableBookmarking("server")
 shinyApp(ui, server)

@@ -1,0 +1,33 @@
+%:::%                   ::: hack solution
+PAGE_404_ROUTE          Default 404 page
+attach_attribs          Attach 'router-hidden' class to single page UI
+                        content
+callback_mapping        Create a mapping between a UI element and a
+                        server callback.
+change_page             Change the currently displayed page.
+cleanup_hashpath        Formats a URL fragment into a hashpath starting
+                        with "#!/"
+create_router_callback
+                        Internal function creating a router callback
+                        function. One need to call router callback with
+                        Shiny input and output in server code.
+disable_bootstrap_on_bookmark
+                        Fix conflicts when some bookmark uses bootstrap
+extract_link_name       Extract link name
+get_page                Convenience function to retrieve just the
+                        "page" part of the input.
+get_query_param         Get Query Parameters
+get_url_hash            Internal function to get url hash with #!.
+is_page                 Is page
+log_msg                 Helper function to print out log messages into
+                        Shiny using cat() and stderr(), as described on
+                        https://shiny.rstudio.com/articles/debugging.html
+make_router             Creates router.
+page404                 404 page
+parse_url_path          Parse url and build GET parameters list
+route                   Create single route configuration.
+route_link              Route link
+router_server           Create router pages server callback
+router_ui               Creates router UI
+valid_path              Internal function that validates that path is
+                        defined in routes.
